@@ -1,26 +1,22 @@
-FROM dockur/windows
+# CORRECTED IMAGE NAME: 'dockurr' with two r's
+FROM dockurr/windows:latest
 
 # 1. SELECT WINDOWS 10
 ENV VERSION="win10"
 
-# 2. DISABLE KVM (Mandatory on Render)
-# Even on Pro tier, Render does not expose hardware virtualization.
-# We set this to "N" to force Software Emulation (TCG) so it starts without crashing.
+# 2. DISABLE KVM (CRITICAL FOR RENDER)
+# Render does not support KVM (Hardware Virtualization), even on Pro.
+# We must set this to "N" to force Software Mode, or it will crash on boot.
 ENV KVM="N"
 
-# 3. ALLOCATE PRO RESOURCES
-# Since you are on Pro/Max, we give it plenty of juice.
-# Adjust 'RAM_SIZE' based on your specific plan (e.g., if you have 8GB plan, give it 7G).
+# 3. MAXIMIZE RESOURCES (PRO TIER)
+# Adjust these based on your specific Render plan limits.
 ENV RAM_SIZE="8G"
 ENV CPU_CORES="4"
-
-# 4. DISK SPACE
-# Windows 10 needs space. Ensure your Render plan has enough ephemeral storage.
 ENV DISK_SIZE="64G"
 
-# 5. AUTOMATION
-# Accept EULA automatically so it boots straight to desktop.
+# 4. SETUP AUTOMATION
 ENV ACCEPT_EULA="Y"
 
-# 6. EXPOSE WEB VIEWER
+# 5. EXPOSE WEB VIEWER
 EXPOSE 8006
