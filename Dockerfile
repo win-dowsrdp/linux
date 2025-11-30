@@ -1,19 +1,19 @@
-FROM ubuntu:latest
+FROM dockur/windows
 
-# 1. Install Python (needed for the web server and the systemd emulator)
-RUN apt-get update && apt-get install -y python3 wget sudo
+# 1. FORCE SOFTWARE MODE (Crucial for Render)
+ENV KVM="N"
 
-# 2. INSTALL FAKE SYSTEMD
-# This script intercepts 'systemctl' commands so the installer thinks systemd is working.
-RUN wget https://raw.githubusercontent.com/gdraheim/docker-systemctl-replacement/master/files/docker/systemctl3.py -O /usr/bin/systemctl
-RUN chmod +x /usr/bin/systemctl
+# 2. SELECT LIGHTWEIGHT VERSION
+# Windows 10/11 requires 2GB+ RAM and will crash Render Free Tier.
+# We use XP because it runs fast on low RAM.
+ENV VERSION="winxp"
 
-# 3. SETUP THE ENVIRONMENT TO HIDE DOCKER
-# We create a start script that deletes docker markers before opening the port
-RUN echo '#!/bin/bash\n\
-rm -f /.dockerenv\n\
-rm -f /run/.containerenv\n\
-python3 -m http.server 10000' > /start.sh && chmod +x /start.sh
+# 3. SET RAM LIMIT
+# Render Free tier gives ~512MB. We set this to avoid OOM kills.
+ENV RAM_SIZE="400M"
 
-# 4. Run the script
-CMD ["/start.sh"]
+# 4. ACCEPT EULA (Required to start automatically)
+ENV ACCEPT_EULA="Y"
+
+# 5. EXPOSE THE WEB VIEWER PORT
+EXPOSE 8006
